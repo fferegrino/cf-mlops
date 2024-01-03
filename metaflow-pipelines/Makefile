@@ -1,2 +1,2 @@
 clean:
-	rm -rf mlartifacts mlruns
+	rm -rf mlartifacts mlruns .metaflow
