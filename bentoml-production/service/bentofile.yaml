@@ -1,0 +1,8 @@
+service: "service:hotel_cancellations_service"
+labels:
+  owner: "Team Facilito"
+include:
+  - "*.py"
+python:
+  packages:
+   - "scikit-learn"

@@ -1,0 +1,4 @@
+jupyterlab
+jupyter
+black
+isort
