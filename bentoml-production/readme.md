@@ -110,3 +110,77 @@ Sirve tu contenedor con:
 ```bash
 docker run -p 3000:3000 hotel-cancellations-service:[tag]
 ```
+
+# 5. Crear un runner personalizado
+
+## 5.1 Agrega la clase del runner
+
+Agrega la un archivo llamado `hotel_cancellations_runner.py`:
+
+```python
+import bentoml
+import pandas as pd
+
+
+class HotelCancellationsModelRunner(bentoml.Runnable):
+    SUPPORTED_RESOURCES = ("cpu",)
+    SUPPORTS_CPU_MULTI_THREADING = True
+
+    def __init__(self, model: bentoml.Model) -> None:
+        self.classifier = bentoml.sklearn.load_model(model)
+
+    @bentoml.Runnable.method()
+    def will_cancel(self, input_data: pd.DataFrame) -> pd.DataFrame:
+        resultado = input_data[["reservation_id"]]
+        predict_probas = self.classifier.predict_proba(input_data)
+        negative_proba = predict_probas[:, 1]
+        resultado["will_cancel"] = negative_proba
+        return resultado
+```
+
+## 5.2 Modifica la clase del servicio
+
+```python
+import bentoml
+import numpy as np
+from bentoml.io import PandasDataFrame
+
+from hotel_cancellations_runner import HotelCancellationsModelRunner
+
+MODEL_TAG = "hotel-cancellations-model"
+
+
+hotel_cancellations_model = bentoml.sklearn.get(MODEL_TAG)
+hotel_cancellations_model_runner = bentoml.Runner(
+    HotelCancellationsModelRunner,
+    models=[hotel_cancellations_model],
+    runnable_init_params={"model": hotel_cancellations_model},
+)
+
+hotel_cancellations_service = bentoml.Service("hotel-cancellations-service", runners=[hotel_cancellations_model_runner])
+
+
+@hotel_cancellations_service.api(input=PandasDataFrame(), output=PandasDataFrame())
+def predict(input_df):
+    # Necesitamos convertir `children` a `np.float64` manualmente debido a las peculiaridades de la serialización JSON
+    input_df["children"] = input_df["children"].astype(np.float64)
+
+    return hotel_cancellations_model_runner.will_cancel.run(input_df)
+```
+
+## 5.3 Modifica la definición en `bentofile.yaml``
+
+Agrega `pandas`:
+
+```yaml
+service: "service:hotel_cancellations_service"
+labels:
+  owner: "Team Facilito"
+include:
+  - "*.py"
+python:
+  packages:
+   - "scikit-learn"
+   - "pandas"
+```
+
